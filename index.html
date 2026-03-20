@@ -21,10 +21,11 @@ input { padding:8px; margin:5px; width:90%; }
 <h2>🌾 EARL du Mas Cardelle</h2>
 
 <button onclick="showAdd()">➕ Nouvelle parcelle</button>
-<button onclick="exportRegistre()">📄 Export registre</button>
+<button onclick="exportRegistre()">📄 Export</button>
+<button onclick="sauvegarde()">☁️ Sauvegarde</button>
+<input type="file" onchange="importPAC(this)">
 
 <div id="gps"></div>
-
 <div id="map"></div>
 
 <div id="form" style="display:none;">
@@ -38,189 +39,194 @@ input { padding:8px; margin:5px; width:90%; }
 
 <script>
 
-// INIT MAP
+// ===== CARTE + SATELLITE =====
+let map = L.map('map').setView([43.8,4.6],13);
+
 let normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
 
 let satellite = L.tileLayer(
-  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 );
 
 normal.addTo(map);
 
 L.control.layers({
-  "Carte": normal,
-  "Satellite": satellite
+"Carte": normal,
+"Satellite": satellite
 }).addTo(map);
 
-// GPS
+// ===== GPS =====
 navigator.geolocation.watchPosition(pos=>{
-  let lat = pos.coords.latitude;
-  let lng = pos.coords.longitude;
-  document.getElementById("gps").innerHTML =
-    "📡 GPS : "+lat.toFixed(5)+" , "+lng.toFixed(5);
-  L.marker([lat,lng]).addTo(map);
+let lat = pos.coords.latitude;
+let lng = pos.coords.longitude;
+document.getElementById("gps").innerHTML =
+"📡 GPS : "+lat.toFixed(5)+" , "+lng.toFixed(5);
+L.marker([lat,lng]).addTo(map);
 });
 
-// DATA
+// ===== DATA =====
 let parcelles = JSON.parse(localStorage.getItem("parcelles")||"[]");
 
-// DRAW
+// ===== DESSIN =====
 let points=[];
 let polygon;
 
-map.on('click', function(e){
-  points.push([e.latlng.lat, e.latlng.lng]);
+map.on('click', e=>{
+points.push([e.latlng.lat,e.latlng.lng]);
 
-  if(polygon){
-    map.removeLayer(polygon);
-  }
+if(polygon) map.removeLayer(polygon);
 
-  polygon = L.polygon(points, {color:'green'}).addTo(map);
+polygon = L.polygon(points,{color:'green'}).addTo(map);
 });
 
-// SURFACE
+// ===== SURFACE =====
 function surface(coords){
-  let area=0;
-  for(let i=0;i<coords.length;i++){
-    let [x1,y1]=coords[i];
-    let [x2,y2]=coords[(i+1)%coords.length];
-    area += x1*y2 - x2*y1;
-  }
-  return Math.abs(area/2)*111139*111139/10000;
+let area=0;
+for(let i=0;i<coords.length;i++){
+let [x1,y1]=coords[i];
+let [x2,y2]=coords[(i+1)%coords.length];
+area += x1*y2 - x2*y1;
+}
+return Math.abs(area/2)*111139*111139/10000;
 }
 
-// UI
+// ===== UI =====
 function showAdd(){
-  document.getElementById("form").style.display="block";
+document.getElementById("form").style.display="block";
 }
 
+// ===== SAVE =====
 function save(){
 
-  if(points.length < 3){
-    alert("Dessine la parcelle !");
-    return;
-  }
-
-  let nom = document.getElementById("nom").value;
-  let culture = document.getElementById("culture").value;
-
-  if(!nom){
-    alert("Nom manquant");
-    return;
-  }
-
-  let surf = surface(points).toFixed(2);
-
-  parcelles.push({
-    id:Date.now(),
-    nom,
-    culture,
-    surface:surf,
-    points,
-    interventions:[]
-  });
-
-  localStorage.setItem("parcelles",JSON.stringify(parcelles));
-
-  alert("Parcelle enregistrée ✅");
-
-  points=[];
-  if(polygon) map.removeLayer(polygon);
-
-  update();
+if(points.length<3){
+alert("Dessine la parcelle !");
+return;
 }
 
-// INTERVENTIONS
+let nom = document.getElementById("nom").value;
+let culture = document.getElementById("culture").value;
+
+if(!nom){
+alert("Nom manquant");
+return;
+}
+
+let surf = surface(points).toFixed(2);
+
+let rendement = prompt("Rendement t/ha ?");
+let prix = prompt("Prix €/t ?");
+let cout = prompt("Coût € ?");
+
+let marge = (rendement*prix*surf)-cout;
+
+parcelles.push({
+id:Date.now(),
+nom,culture,
+surface:surf,
+marge,
+points,
+interventions:[]
+});
+
+localStorage.setItem("parcelles",JSON.stringify(parcelles));
+
+points=[];
+if(polygon) map.removeLayer(polygon);
+
+update();
+}
+
+// ===== INTERVENTIONS =====
 function addInter(id){
-  let type = prompt("Produit");
-  let dose = prompt("Dose");
-  let date = prompt("Date");
+let type = prompt("Produit");
+let dose = prompt("Dose");
+let date = prompt("Date");
 
-  let p = parcelles.find(x=>x.id==id);
-  p.interventions.push({type,dose,date});
+let p = parcelles.find(x=>x.id==id);
+p.interventions.push({type,dose,date});
 
-  localStorage.setItem("parcelles",JSON.stringify(parcelles));
+localStorage.setItem("parcelles",JSON.stringify(parcelles));
+
+update();
 }
 
-// LIST
+// ===== IMPORT PAC =====
+function importPAC(input){
+let file = input.files[0];
+let reader = new FileReader();
+
+reader.onload = function(e){
+let geo = JSON.parse(e.target.result);
+
+geo.features.forEach(f=>{
+let coords = f.geometry.coordinates[0].map(c=>[c[1],c[0]]);
+let surf = surface(coords).toFixed(2);
+
+parcelles.push({
+id:Date.now()+Math.random(),
+nom:"PAC",
+culture:"",
+surface:surf,
+points:coords,
+interventions:[]
+});
+
+L.polygon(coords,{color:'blue'}).addTo(map);
+});
+
+localStorage.setItem("parcelles",JSON.stringify(parcelles));
+update();
+};
+
+reader.readAsText(file);
+}
+
+// ===== LIST =====
 function update(){
-  document.getElementById("list").innerHTML =
-    parcelles.map(p=>`
-      <div class="card">
-      <b>🌱 ${p.nom}</b><br>
-      Culture: ${p.culture}<br>
-      Surface: ${p.surface} ha<br>
-      Marge: ${Math.round(p.marge)} €<br>
-      <button onclick="addInter(${p.id})">🚜 Intervention</button>
-      ${p.interventions.map(i=>`
-        <div>• ${i.date} - ${i.type} (${i.dose})</div>
-      `).join("")}
-      </div>
-    `).join("");
+document.getElementById("list").innerHTML =
+parcelles.map(p=>`
+<div class="card">
+<b>🌱 ${p.nom}</b><br>
+Culture: ${p.culture}<br>
+Surface: ${p.surface} ha<br>
+Marge: ${Math.round(p.marge||0)} €<br>
+<button onclick="addInter(${p.id})">🚜 Intervention</button>
+${p.interventions.map(i=>`
+<div>• ${i.date} - ${i.type} (${i.dose})</div>
+`).join("")}
+</div>
+`).join("");
 }
 
 update();
 
-// EXPORT
+// ===== EXPORT =====
 function exportRegistre(){
-  let txt="REGISTRE PHYTO\n\n";
+let txt="REGISTRE PHYTO\n\n";
 
-  parcelles.forEach(p=>{
-    txt+="Parcelle: "+p.nom+"\n";
-    p.interventions.forEach(i=>{
-      txt+=`${i.date} - ${i.type} - ${i.dose}\n`;
-    });
-    txt+="\n";
-  });
+parcelles.forEach(p=>{
+txt+="Parcelle: "+p.nom+"\n";
+p.interventions.forEach(i=>{
+txt+=`${i.date} - ${i.type} - ${i.dose}\n`;
+});
+txt+="\n";
+});
 
-  let blob=new Blob([txt]);
-  let a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="registre.txt";
-  a.click();
+let blob=new Blob([txt]);
+let a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download="registre.txt";
+a.click();
+}
+
+// ===== SAUVEGARDE =====
+function sauvegarde(){
+let data = JSON.stringify(parcelles);
+navigator.clipboard.writeText(data);
+alert("Sauvegarde copiée 👍");
 }
 
 </script>
 
 </body>
 </html>
-
-<input type="file" onchange="importPAC(this)">
-function importPAC(input){
-  let file = input.files[0];
-  let reader = new FileReader();
-
-  reader.onload = function(e){
-    let geo = JSON.parse(e.target.result);
-
-    geo.features.forEach(f=>{
-      let coords = f.geometry.coordinates[0].map(c=>[c[1],c[0]]);
-
-      let surf = surface(coords).toFixed(2);
-
-      parcelles.push({
-        id:Date.now()+Math.random(),
-        nom:"PAC",
-        culture:"",
-        surface:surf,
-        points:coords,
-        interventions:[]
-      });
-
-      L.polygon(coords,{color:'blue'}).addTo(map);
-    });
-
-    localStorage.setItem("parcelles",JSON.stringify(parcelles));
-    update();
-  };
-
-  reader.readAsText(file);
-}
-function sauvegardeCloud(){
-  let data = JSON.stringify(parcelles);
-
-  navigator.clipboard.writeText(data);
-
-  alert("Sauvegarde copiée ! Colle-la ailleurs (WhatsApp, mail…) 👍");
-}
-<button onclick="sauvegardeCloud()">☁️ Sauvegarde</button>
