@@ -39,10 +39,18 @@ input { padding:8px; margin:5px; width:90%; }
 <script>
 
 // INIT MAP
-let map = L.map('map').setView([43.8,4.6],13);
-
 let normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+
+let satellite = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+);
+
 normal.addTo(map);
+
+L.control.layers({
+  "Carte": normal,
+  "Satellite": satellite
+}).addTo(map);
 
 // GPS
 navigator.geolocation.watchPosition(pos=>{
@@ -176,3 +184,43 @@ function exportRegistre(){
 
 </body>
 </html>
+
+<input type="file" onchange="importPAC(this)">
+function importPAC(input){
+  let file = input.files[0];
+  let reader = new FileReader();
+
+  reader.onload = function(e){
+    let geo = JSON.parse(e.target.result);
+
+    geo.features.forEach(f=>{
+      let coords = f.geometry.coordinates[0].map(c=>[c[1],c[0]]);
+
+      let surf = surface(coords).toFixed(2);
+
+      parcelles.push({
+        id:Date.now()+Math.random(),
+        nom:"PAC",
+        culture:"",
+        surface:surf,
+        points:coords,
+        interventions:[]
+      });
+
+      L.polygon(coords,{color:'blue'}).addTo(map);
+    });
+
+    localStorage.setItem("parcelles",JSON.stringify(parcelles));
+    update();
+  };
+
+  reader.readAsText(file);
+}
+function sauvegardeCloud(){
+  let data = JSON.stringify(parcelles);
+
+  navigator.clipboard.writeText(data);
+
+  alert("Sauvegarde copiée ! Colle-la ailleurs (WhatsApp, mail…) 👍");
+}
+<button onclick="sauvegardeCloud()">☁️ Sauvegarde</button>
