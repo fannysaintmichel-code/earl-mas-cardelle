@@ -23,9 +23,14 @@ input { padding:8px; margin:5px; width:90%; }
 <button onclick="showAdd()">➕ Nouvelle parcelle</button>
 <button onclick="exportRegistre()">📄 Export</button>
 <button onclick="sauvegarde()">☁️ Sauvegarde</button>
+<button onclick="bilan()">📊 Bilan</button>
+<button onclick="ndvi()">🛰️ NDVI</button>
+
 <input type="file" onchange="importPAC(this)">
 
 <div id="gps"></div>
+<div id="meteo"></div>
+
 <div id="map"></div>
 
 <div id="form" style="display:none;">
@@ -55,13 +60,23 @@ L.control.layers({
 "Satellite": satellite
 }).addTo(map);
 
-// ===== GPS =====
+// ===== GPS + METEO =====
 navigator.geolocation.watchPosition(pos=>{
 let lat = pos.coords.latitude;
 let lng = pos.coords.longitude;
+
 document.getElementById("gps").innerHTML =
 "📡 GPS : "+lat.toFixed(5)+" , "+lng.toFixed(5);
+
 L.marker([lat,lng]).addTo(map);
+
+// météo
+fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`)
+.then(r=>r.json())
+.then(data=>{
+document.getElementById("meteo").innerHTML =
+"🌦️ Température : " + data.current_weather.temperature + "°C";
+});
 });
 
 // ===== DATA =====
@@ -224,6 +239,28 @@ function sauvegarde(){
 let data = JSON.stringify(parcelles);
 navigator.clipboard.writeText(data);
 alert("Sauvegarde copiée 👍");
+}
+
+// ===== BILAN =====
+function bilan(){
+let totalSurface=0;
+let totalMarge=0;
+
+parcelles.forEach(p=>{
+totalSurface += Number(p.surface);
+totalMarge += Number(p.marge||0);
+});
+
+alert(
+"📊 BILAN\n\n"+
+"Surface : "+totalSurface.toFixed(2)+" ha\n"+
+"Marge : "+Math.round(totalMarge)+" €"
+);
+}
+
+// ===== NDVI =====
+function ndvi(){
+alert("Utilise la vue satellite pour observer la vigueur des cultures 🌱");
 }
 
 </script>
