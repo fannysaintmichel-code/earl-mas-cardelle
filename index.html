@@ -60,10 +60,14 @@ let parcelles = JSON.parse(localStorage.getItem("parcelles")||"[]");
 let points=[];
 let polygon;
 
-map.on('click', e=>{
-  points.push([e.latlng.lat,e.latlng.lng]);
-  if(polygon) map.removeLayer(polygon);
-  polygon = L.polygon(points).addTo(map);
+map.on('click', function(e){
+  points.push([e.latlng.lat, e.latlng.lng]);
+
+  if(polygon){
+    map.removeLayer(polygon);
+  }
+
+  polygon = L.polygon(points, {color:'green'}).addTo(map);
 });
 
 // SURFACE
@@ -82,31 +86,35 @@ function showAdd(){
   document.getElementById("form").style.display="block";
 }
 
-// SAVE
 function save(){
-  if(points.length<3) return;
+
+  if(points.length < 3){
+    alert("Dessine la parcelle !");
+    return;
+  }
 
   let nom = document.getElementById("nom").value;
   let culture = document.getElementById("culture").value;
 
+  if(!nom){
+    alert("Nom manquant");
+    return;
+  }
+
   let surf = surface(points).toFixed(2);
-
-  let rendement = prompt("Rendement t/ha ?");
-  let prix = prompt("Prix €/t ?");
-  let cout = prompt("Coût € ?");
-
-  let marge = (rendement*prix*surf)-cout;
 
   parcelles.push({
     id:Date.now(),
-    nom,culture,
+    nom,
+    culture,
     surface:surf,
-    marge,
     points,
     interventions:[]
   });
 
   localStorage.setItem("parcelles",JSON.stringify(parcelles));
+
+  alert("Parcelle enregistrée ✅");
 
   points=[];
   if(polygon) map.removeLayer(polygon);
