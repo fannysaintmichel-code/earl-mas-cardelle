@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>EARL du Mas Cardelle</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body>
+  <h2>🌾 EARL du Mas Cardelle</h2>
+  <input id="nom" placeholder="Nom parcelle">
+  <input id="culture" placeholder="Culture">
+  <button onclick="save()">Enregistrer</button>
+
+  <div id="map" style="height:400px;"></div>
+
+  <div id="list"></div>
+
+<script>
+let map = L.map('map').setView([43.8, 4.6], 13);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+let points = [];
+let polygon;
+let parcelles = JSON.parse(localStorage.getItem("parcelles") || "[]");
+
+function updateList() {
+  document.getElementById("list").innerHTML =
+    parcelles.map(p => `🌱 ${p.nom} - ${p.culture}`).join("<br>");
+}
+
+updateList();
+
+map.on('click', function(e){
+  points.push([e.latlng.lat, e.latlng.lng]);
+  if(polygon) map.removeLayer(polygon);
+  polygon = L.polygon(points).addTo(map);
+});
+
+function save(){
+  let nom = document.getElementById("nom").value;
+  let culture = document.getElementById("culture").value;
+
+  if(points.length < 3) return;
+
+  parcelles.push({nom, culture, points});
+  localStorage.setItem("parcelles", JSON.stringify(parcelles));
+
+  points = [];
+  if(polygon) map.removeLayer(polygon);
+
+  updateList();
+}
+</script>
+
+</body>
+</html>
