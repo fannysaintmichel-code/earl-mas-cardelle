@@ -7,27 +7,54 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
 <body>
-  <h2>🌾 EARL du Mas Cardelle</h2>
-  <input id="nom" placeholder="Nom parcelle">
-  <input id="culture" placeholder="Culture">
-  <button onclick="save()">Enregistrer</button>
 
-  <div id="map" style="height:400px;"></div>
+<h2>🌾 EARL du Mas Cardelle</h2>
 
-  <div id="list"></div>
+<input id="nom" placeholder="Nom parcelle">
+<input id="culture" placeholder="Culture">
+<button onclick="save()">💾 Enregistrer</button>
+<button onclick="exportRegistre()">📄 Export</button>
+
+<div id="map" style="height:400px;"></div>
+
+<div id="gps"></div>
+<div id="list"></div>
 
 <script>
 let map = L.map('map').setView([43.8, 4.6], 13);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
+// GPS
+navigator.geolocation.watchPosition(pos => {
+  let lat = pos.coords.latitude;
+  let lng = pos.coords.longitude;
+  document.getElementById("gps").innerHTML =
+    "📡 GPS : " + lat.toFixed(5) + ", " + lng.toFixed(5);
+  L.marker([lat, lng]).addTo(map);
+});
+
 let points = [];
 let polygon;
+
 let parcelles = JSON.parse(localStorage.getItem("parcelles") || "[]");
 
-function updateList() {
+function calculSurface(coords){
+  let area = 0;
+  for(let i=0;i<coords.length;i++){
+    let [x1,y1]=coords[i];
+    let [x2,y2]=coords[(i+1)%coords.length];
+    area += x1*y2 - x2*y1;
+  }
+  return Math.abs(area/2)*111139*111139/10000;
+}
+
+function updateList(){
   document.getElementById("list").innerHTML =
-    parcelles.map(p => `🌱 ${p.nom} - ${p.culture}`).join("<br>");
+    parcelles.map(p => 
+      `🌱 ${p.nom} - ${p.culture} - ${p.surface} ha 
+       <button onclick="addTraitement(${p.id})">🚜 Traitement</button>
+       <br>`).join("");
 }
 
 updateList();
@@ -44,13 +71,52 @@ function save(){
 
   if(points.length < 3) return;
 
-  parcelles.push({nom, culture, points});
+  let surface = calculSurface(points).toFixed(2);
+
+  parcelles.push({
+    id: Date.now(),
+    nom,
+    culture,
+    surface,
+    points,
+    interventions:[]
+  });
+
   localStorage.setItem("parcelles", JSON.stringify(parcelles));
 
   points = [];
   if(polygon) map.removeLayer(polygon);
 
   updateList();
+}
+
+function addTraitement(id){
+  let type = prompt("Produit");
+  let dose = prompt("Dose");
+  let date = prompt("Date");
+
+  let p = parcelles.find(x=>x.id===id);
+  p.interventions.push({type,dose,date});
+
+  localStorage.setItem("parcelles", JSON.stringify(parcelles));
+}
+
+function exportRegistre(){
+  let text = "REGISTRE PHYTO\n\n";
+
+  parcelles.forEach(p=>{
+    text += "Parcelle: "+p.nom+"\n";
+    p.interventions.forEach(i=>{
+      text += "- "+i.date+" | "+i.type+" | "+i.dose+"\n";
+    });
+    text += "\n";
+  });
+
+  let blob = new Blob([text], {type:"text/plain"});
+  let a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "registre_phyto.txt";
+  a.click();
 }
 </script>
 
