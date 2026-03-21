@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
 <style>
 body { font-family: Arial; margin:0; }
 header { background:#2e7d32; color:white; padding:10px; }
@@ -18,28 +20,51 @@ button { padding:10px; margin:5px; font-size:16px; }
 
 <body>
 
-<header>
-🌾 EARL du Mas Cardelle
-</header>
+<header>🌾 EARL du Mas Cardelle</header>
 
 <div id="app"></div>
 
 <script>
 
-// ===== DATA =====
-let parcelles = JSON.parse(localStorage.getItem("parcelles")||"[]");
+// ===== SUPABASE CONFIG =====
+const supabase = supabase.createClient(
+"https://xuklvtvspoxrdsthfjvs.supabase.co",
+"sb_publishable_tfqgd2thRE5-T_O7PUhXcA_Bh2H-g2z"
+);
 
-// ===== NAVIGATION =====
+// ===== LOGIN SIMPLE =====
+let user = null;
+
+async function login(){
+  let email = prompt("Email ?");
+  await supabase.auth.signInWithOtp({ email });
+  alert("Vérifie ton email 👍");
+}
+
+// ===== LOAD DATA =====
+let parcelles = [];
+
+async function load(){
+  let { data } = await supabase.from("parcelles").select("*");
+  parcelles = data || [];
+  accueil();
+}
+
+// ===== SAVE CLOUD =====
+async function saveCloud(p){
+  await supabase.from("parcelles").insert([p]);
+}
+
+// ===== UI =====
 function accueil(){
 document.getElementById("app").innerHTML = `
+<button onclick="login()">👤 Connexion</button>
 <button onclick="newParcelle()">➕ Nouvelle parcelle</button>
-<button onclick="bilan()">📊 Bilan</button>
 
 ${parcelles.map(p=>`
 <div class="card">
 <b>${p.nom}</b><br>
-${p.surface} ha - ${p.culture}<br>
-<button onclick="voir(${p.id})">👁️ Voir</button>
+${p.surface} ha - ${p.culture}
 </div>
 `).join("")}
 `;
@@ -57,54 +82,13 @@ document.getElementById("app").innerHTML = `
 initMap();
 }
 
-function voir(id){
-let p = parcelles.find(x=>x.id==id);
-
-document.getElementById("app").innerHTML = `
-<div class="card">
-<b>${p.nom}</b><br>
-Surface: ${p.surface} ha<br>
-Culture: ${p.culture}<br>
-Marge: ${Math.round(p.marge||0)} €<br>
-
-<button onclick="addInter(${p.id})">🚜 Intervention</button>
-<button onclick="accueil()">⬅️ Retour</button>
-
-${p.interventions.map(i=>`
-<div>• ${i.date} - ${i.type}</div>
-`).join("")}
-</div>
-`;
-}
-
 // ===== MAP =====
 let map, points=[], polygon;
 
 function initMap(){
 map = L.map('map').setView([43.8,4.6],13);
 
-let normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-
-let satellite = L.tileLayer(
-'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-);
-
-let cadastre = L.tileLayer(
-'https://wxs.ign.fr/parcellaire/geoportail/wmts?REQUEST=GetTile&SERVICE=WMTS&VERSION=1.0.0&LAYER=CADASTRALPARCELS.PARCELS&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/png&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}'
-);
-
-normal.addTo(map);
-
-L.control.layers({
-"Carte": normal,
-"Satellite": satellite,
-"Cadastre": cadastre
-}).addTo(map);
-
-// GPS
-navigator.geolocation.watchPosition(pos=>{
-L.marker([pos.coords.latitude,pos.coords.longitude]).addTo(map);
-});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 map.on('click', e=>{
 points.push([e.latlng.lat,e.latlng.lng]);
@@ -126,7 +110,8 @@ return Math.abs(area/2)*111139*111139/10000;
 }
 
 // ===== SAVE =====
-function save(){
+async function save(){
+
 if(points.length<3) return;
 
 let nom = document.getElementById("nom").value;
@@ -134,53 +119,23 @@ let culture = document.getElementById("culture").value;
 
 let surf = surface(points).toFixed(2);
 
-let rendement = prompt("Rendement ?");
-let prix = prompt("Prix ?");
-let cout = prompt("Coût ?");
-
-let marge = (rendement*prix*surf)-cout;
-
-parcelles.push({
-id:Date.now(),
-nom,culture,
+let p = {
+nom,
+culture,
 surface:surf,
-marge,
-points,
-interventions:[]
-});
+points
+};
 
-localStorage.setItem("parcelles",JSON.stringify(parcelles));
+await saveCloud(p);
+
+alert("Sauvegardé en ligne ✅");
 
 points=[];
-accueil();
-}
-
-// ===== INTERVENTIONS =====
-function addInter(id){
-let type = prompt("Produit");
-let date = prompt("Date");
-
-let p = parcelles.find(x=>x.id==id);
-p.interventions.push({type,date});
-
-localStorage.setItem("parcelles",JSON.stringify(parcelles));
-
-voir(id);
-}
-
-// ===== BILAN =====
-function bilan(){
-let s=0,m=0;
-parcelles.forEach(p=>{
-s+=Number(p.surface);
-m+=Number(p.marge||0);
-});
-
-alert("Surface: "+s+" ha\nMarge: "+m+" €");
+load();
 }
 
 // ===== START =====
-accueil();
+load();
 
 </script>
 
